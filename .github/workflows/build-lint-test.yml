@@ -8,7 +8,8 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-
+  ASSET_DIR: ${{ GITHUB_WORKSPACE }}/frontend/dist
+  
 jobs:
   backend:
     name: Backend
@@ -46,7 +47,7 @@ jobs:
       - name: Run tests
         run: cargo --verbose --locked test
       - name: Build
-        run: ASSET_DIR=$GITHUB_WORKSPACE/frontend/dist cargo --verbose --locked build --features memory-serve
+        run: cargo --verbose --locked build --features memory-serve
       - uses: actions/upload-artifact@v4
         with:
           name: backend-build
