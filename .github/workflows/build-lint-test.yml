@@ -46,7 +46,7 @@ jobs:
       - name: Run tests
         run: cargo --verbose --locked test
       - name: Build
-        run: cargo --verbose --locked build
+        run: ASSET_DIR=$GITHUB_WORKSPACE/frontend/dist cargo --verbose --locked build --features memory-serve
       - uses: actions/upload-artifact@v4
         with:
           name: backend-build
