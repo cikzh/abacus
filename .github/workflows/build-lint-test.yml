@@ -127,6 +127,10 @@ jobs:
           path: builds/backend
       - name: Make Abacus executable
         run: chmod a+x ../builds/backend/abacus
+      - name: Make gen-eml executable
+        run: chmod a+x ../builds/backend/gen-eml
+      - name: Generate large EML files
+        run: ../builds/backend/gen-eml
       - name: Run e2e playwright tests
         run: npm run test:e2e -- --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
       - name: Upload Playwright report
