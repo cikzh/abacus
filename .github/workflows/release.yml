@@ -11,9 +11,35 @@ permissions:
   pull-requests: write
 
 jobs:
+  build-frontend:
+    name: Build production frontend (on linux only)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci --omit=dev
+      - name: Build
+        run: npm run build:prod
+        env:
+          NODE_ENV: production
+          SHOW_DEV_PAGE: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-production-build
+          path: frontend/dist
+
   build:
     if: github.repository == 'kiesraad/abacus'
     name: Build
+    needs:
+      - build-frontend
     permissions:
       contents: read
       attestations: write
@@ -40,16 +66,11 @@ jobs:
       NODE_ENV: production
     steps:
       - uses: actions/checkout@v5
-      - name: Setup Node
-        uses: actions/setup-node@v6
+      - name: Download Abacus Frontend
+        uses: actions/download-artifact@v5
         with:
-          node-version: 22
-      - name: Install dependencies
-        run: npm ci
-        working-directory: ./frontend
-      - name: Build
-        run: npm run build:prod
-        working-directory: ./frontend
+          name: frontend-production-build
+          path: frontend/dist
       - name: Setup Rust
         run: rustup update stable && rustup default stable
       - name: Install target
@@ -58,9 +79,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y musl-tools
         if: matrix.target.os == 'ubuntu-latest'
       - name: Run tests
-        run: cargo --locked test --release --no-default-features --features memory-serve,embed-typst --target=${{ matrix.target.name }}
+        run: cargo --locked test --release --no-default-features --features memory-serve,embed-typst,airgap-detection --target=${{ matrix.target.name }}
       - name: Build
-        run: cargo --locked build --release --no-default-features --features memory-serve,embed-typst --target=${{ matrix.target.name }}
+        run: cargo --locked build --release --no-default-features --features memory-serve,embed-typst,airgap-detection --target=${{ matrix.target.name }}
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v3
         with:
@@ -163,7 +184,7 @@ jobs:
           name: Version ${{ env.TAG }}
 
   deploy:
-    name: Deploy to abacus-test.nl
+    name: Deploy to abacus-test.nl, without airgap detection
     needs:
       - build
       - release
@@ -175,14 +196,24 @@ jobs:
       deployments: write
     runs-on: ubuntu-latest
     steps:
-      - name: Download abacus
+      - uses: actions/checkout@v5
+      - name: Download Abacus Frontend
         uses: actions/download-artifact@v5
         with:
-          name: abacus-ubuntu-latest
+          name: frontend-production-build
+          path: frontend/dist
+      - name: Setup Rust
+        run: rustup update stable && rustup default stable
+      - name: Install target
+        run: rustup target add x86_64-unknown-linux-musl
+      - name: Install musl
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Build
+        run: cargo --locked build --release --no-default-features --features memory-serve,embed-typst --target=x86_64-unknown-linux-musl
       - name: Upload binary to test server
         run: |
           curl -s -v \
           --fail \
           -H "Authorization: Bearer ${{ secrets.ABACUS_TEST_API_KEY }}" \
-          -T ./abacus \
+          -T ./backend/target/x86_64-unknown-linux-musl/release/abacus \
           https://abacus-test.nl/etes/api/v1/executable/${{ github.sha }}/${{ github.sha }}
